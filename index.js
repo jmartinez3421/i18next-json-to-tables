@@ -93,14 +93,15 @@ const generateExcel = (data, headers) => {
                 name: "Arial",
                 size: 12,
             };
-            row.eachCell((cell) => {
+            for (let j = 0; j < numberOfColumns; j++) {
+                const cell = worksheet.getCell(`${String.fromCharCode(65 + j)}${i}`);
                 cell.border = {
                     bottom: {style: "thin", color: {argb: "303030"}},
                     top: {style: "thin", color: {argb: "303030"}},
                     right: {style: "thin", color: {argb: "303030"}},
                     left: {style: "thin", color: {argb: "303030"}},
                 };
-            });
+            }
         }
 
         // Set column 1 bold
@@ -272,7 +273,9 @@ const startConversion = async () => {
     const foldersMap = {};
     for (const folder of folders) {
         const name = await askString("Which" + " label".green + " do you want to use for the language " + folder.green + "?");
-        foldersMap[folder] = name !== "" ? name : folder;
+        if (name === "") foldersMap[folder] = folder;
+        else if (name.includes(",")) foldersMap[folder] = `"${name}"`;
+        else foldersMap[folder] = name;
     }
 
     await readTranslations(foldersMap);
