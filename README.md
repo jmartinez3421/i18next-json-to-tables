@@ -33,4 +33,8 @@ After that you can run the script:
 pnpm start
 ```
 
+You will be asked for a label for each language, after that the script will start converting the files.
+
+> If you want to use the folder name as label leave it empty and press enter.
+
 When the script is finished, you will find all the results in the `results` folder.

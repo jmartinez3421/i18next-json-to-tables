@@ -1,7 +1,9 @@
 const {readdir} = require('fs/promises');
-const {readFileSync, writeFileSync} = require('fs');
+const {readFileSync, writeFileSync, statSync} = require('fs');
 const path = require('path');
 const ExcelJs = require('exceljs');
+const inquirer = require('inquirer');
+require("colors");
 
 // Indicate the folder where the translations are stored
 const translationsDir = './translations';
@@ -9,47 +11,23 @@ const translationsDir = './translations';
 // Indicate the folder where the results will be stored
 const resultsDir = './results';
 
-// Include all the languages that will be used.
-// The keys are the names of the languages folders in the translations folder,
-// and the values are the names that will be displayed in the result files.
-const languagesMap = {
-    'es': 'Español',
-    'en': 'Inglés',
-    'pt-BR': 'Brasileiro',
-};
-
-const languages = Object.keys(languagesMap);
-const headers = ["Key", ...Object.values(languagesMap)];
 
 // Each translation file will have a key, and the value will have all the keys and their translations in the different languages
 // Example: {"common": { "hello": ["Hola", "Olá", "你好"] }}
 const translations = {};
 
 /**
- * Set the value of a translation. If you add new languages, you need to add a new case here.
- * The position of the language in the array has to match the position of the language in the languagesMap.
- * @param language {string}
+ * Set the value of a translation
  * @param file {string}
  * @param key {string}
  * @param value {string}
+ * @param position {number}
  */
-const setValue = (language, file, key, value) => {
+const setValue = (file, key, value, position) => {
     if (!translations[file][key]) {
         translations[file][key] = [];
     }
-    switch (language) {
-        case 'es':
-            translations[file][key][0] = value.trim();
-            break;
-        case 'en':
-            translations[file][key][1] = value.trim();
-            break;
-        case 'pt-BR':
-            translations[file][key][2] = value.trim();
-            break;
-        default:
-            break;
-    }
+    translations[file][key][position] = value.trim();
 }
 
 /**
@@ -58,30 +36,32 @@ const setValue = (language, file, key, value) => {
  * If the object is an object, it will recursively call itself to read the nested objects.
  * The key of the object will include the previous key and the key of the object itself.
  * This is done to create a nested structure in the translations object.
- * @param language
+ * Ex: If the object is {"a": {"b": "c"}}, the key will be "a.b"
  * @param file
  * @param prevKey
  * @param object
+ * @param position
  */
-const readObject = (language, file, prevKey, object) => {
+const readObject = (file, prevKey, object, position) => {
     if (object instanceof Object) {
         Object.entries(object).forEach(([key, value]) => {
             if (value instanceof Object) {
-                readObject(language, file, `${prevKey}.${key}`, value);
+                readObject(file, `${prevKey}.${key}`, value, position);
             } else {
-                setValue(language, file, `${prevKey}.${key}`, value);
+                setValue(file, `${prevKey}.${key}`, value, position);
             }
         });
     } else {
-        return setValue(language, file, prevKey, object);
+        return setValue(file, prevKey, object, position);
     }
 }
 
 /**
  * Generates an Excel file with all the translations. Each translation file will be a worksheet in the Excel file.
  * @param data {{ [key: string]: [string[]] }}
+ * @param headers {string[]}
  */
-const generateExcel = (data) => {
+const generateExcel = (data, headers) => {
     const workbook = new ExcelJs.Workbook();
 
     Object.entries(data).forEach(([sheetName, values]) => {
@@ -115,10 +95,10 @@ const generateExcel = (data) => {
             };
             row.eachCell((cell) => {
                 cell.border = {
-                    bottom: { style: "thin", color: { argb: "303030" } },
-                    top: { style: "thin", color: { argb: "303030" } },
-                    right: { style: "thin", color: { argb: "303030" } },
-                    left: { style: "thin", color: { argb: "303030" } },
+                    bottom: {style: "thin", color: {argb: "303030"}},
+                    top: {style: "thin", color: {argb: "303030"}},
+                    right: {style: "thin", color: {argb: "303030"}},
+                    left: {style: "thin", color: {argb: "303030"}},
                 };
             });
         }
@@ -142,14 +122,14 @@ const generateExcel = (data) => {
             const cell = worksheet.getCell(`${String.fromCharCode(65 + i)}1`);
             cell.font = {
                 bold: true,
-                color: { argb: "4c7cb2" },
+                color: {argb: "4c7cb2"},
                 name: "Arial",
                 size: 12,
             };
             cell.fill = {
                 type: "pattern",
                 pattern: "solid",
-                fgColor: { argb: "d9e1f2" },
+                fgColor: {argb: "d9e1f2"},
             };
             cell.alignment = {
                 horizontal: "center",
@@ -172,12 +152,32 @@ const generateExcel = (data) => {
 }
 
 /**
+ * Ask the user for a string
+ * @param message {string}
+ * @returns {Promise<string>}
+ */
+const askString = async (message) => {
+    const {string} = await inquirer.prompt([
+        {
+            type: "input",
+            name: "string",
+            message,
+        },
+    ]);
+    return string;
+}
+
+/**
  * Reads the translations from the translations folder and converts them to CSV files and Excel file
+ * @param languagesMap {{ [key: string]: string }}
  * @returns {Promise<void>}
  */
-const readTranslations = async () => {
+const readTranslations = async (languagesMap) => {
+    const languages = Object.keys(languagesMap);
+    const headers = ["Key", ...Object.values(languagesMap)];
+
     // Loop through all the languages folders
-    for (const language of languages) {
+    for (const [index, language] of languages.entries()) {
         console.log(`Reading ${language} translations...`);
         try {
             // Get the names of all the files in the language folder
@@ -200,7 +200,7 @@ const readTranslations = async () => {
 
                     // Map all the values of the json object to the translations object
                     Object.entries(fileTranslations).forEach(([key, value]) => {
-                        readObject(language, file, key, value);
+                        readObject(file, key, value, index);
                     });
                 } catch (err) {
                     console.error(`Error while reading ${filePath}:`, err);
@@ -226,7 +226,7 @@ const readTranslations = async () => {
             // Add the key and its translations to the csv data
             csvData.push([
                 key,
-                    ...translations[key].map((translation) =>`"${translation}"`)
+                ...translations[key].map((translation) => `"${translation}"`)
             ]);
 
             // If the csvObject doesn't have the resultFileName key, create it
@@ -249,9 +249,33 @@ const readTranslations = async () => {
     });
 
     // Generate the Excel file with all the translations
-    generateExcel(excelObjects);
+    generateExcel(excelObjects, headers);
 
     console.log(`All translations have been converted to CSV. You can find them in the ${resultsDir} folder.`);
 }
 
-readTranslations();
+/**
+ * Starts the conversion process by asking the user which labels to use for each language folder and then converting the translations to CSV and Excel files
+ * @returns {Promise<void>}
+ */
+const startConversion = async () => {
+    const foldersNames = await readdir(`${translationsDir}`);
+    const folders = [];
+    for (const folderName of foldersNames) {
+        const folderPath = `${translationsDir}/${folderName}`;
+        const stats = statSync(folderPath);
+        if (stats.isDirectory()) {
+            folders.push(folderName);
+        }
+    }
+
+    const foldersMap = {};
+    for (const folder of folders) {
+        const name = await askString("Which" + " label".green + " do you want to use for the language " + folder.green + "?");
+        foldersMap[folder] = name !== "" ? name : folder;
+    }
+
+    await readTranslations(foldersMap);
+}
+
+startConversion();
