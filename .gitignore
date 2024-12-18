@@ -1,5 +1,11 @@
 node_modules
-results/**.csv
-results/**.xlsx
-translations/**/**.json
 .idea
+
+excels/*
+!excels/README.md
+
+results/*
+!results/README.md
+
+translations/*
+!translations/README.md
